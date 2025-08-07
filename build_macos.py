@@ -282,16 +282,147 @@ def codesign_app():
             print("App bundle code signed successfully")
             return True
         else:
-            print("No code signing certificate found. App will be unsigned.")
-            print("Note: Unsigned apps may show 'damaged' warnings on macOS.")
-            print("Users can right-click and select 'Open' to bypass this warning.")
-            return False
+            print("No code signing certificate found. Using ad-hoc signing...")
+            
+            # Use ad-hoc signing (self-signed)
+            try:
+                subprocess.run([
+                    "codesign", "--force", "--deep", "--sign", "-",
+                    str(app_path)
+                ], check=True)
+                print("App bundle ad-hoc signed successfully")
+                return True
+            except subprocess.CalledProcessError as e:
+                print(f"Ad-hoc signing failed: {e}")
+                return False
             
     except subprocess.CalledProcessError as e:
         print(f"Code signing failed: {e}")
         return False
     except Exception as e:
         print(f"Code signing error: {e}")
+        return False
+
+
+def remove_quarantine_attributes(app_path):
+    """Remove quarantine attributes from app bundle"""
+    
+    try:
+        # Remove quarantine attribute from the app bundle
+        subprocess.run([
+            "xattr", "-rd", "com.apple.quarantine", str(app_path)
+        ], check=True)
+        print(f"Removed quarantine attributes from: {app_path}")
+        
+        # Also remove from all files inside the app bundle
+        for file_path in app_path.rglob("*"):
+            if file_path.is_file():
+                try:
+                    subprocess.run([
+                        "xattr", "-d", "com.apple.quarantine", str(file_path)
+                    ], check=False)  # Don't fail if attribute doesn't exist
+                except:
+                    pass
+        
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Could not remove quarantine attributes: {e}")
+        return False
+    except Exception as e:
+        print(f"Error removing quarantine attributes: {e}")
+        return False
+
+
+def create_dmg_with_quarantine_fix():
+    """Create DMG with quarantine attribute removal"""
+    
+    build_dir = Path(__file__).parent / "build" / "macos"
+    app_bundle = build_dir / "ECU_BIN_Reader"
+    
+    if app_bundle.exists():
+        # Remove quarantine attributes from app bundle
+        remove_quarantine_attributes(app_bundle)
+        
+        # Create a proper DMG using hdiutil
+        dmg_path = build_dir / "ECU_BIN_Reader.dmg"
+        
+        try:
+            # Create a temporary directory for DMG contents
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Copy app bundle to temp directory
+                app_dest = temp_path / "ECU BIN Reader.app"
+                shutil.copytree(app_bundle, app_dest)
+                print(f"App bundle copied to temp directory: {app_dest}")
+                
+                # Remove quarantine attributes from copied app
+                remove_quarantine_attributes(app_dest)
+                
+                # Copy additional files if they exist
+                project_root = Path(__file__).parent
+                if (project_root / "README.md").exists():
+                    shutil.copy2(project_root / "README.md", temp_path)
+                    print("README.md copied to DMG")
+                
+                if (project_root / "LICENSE").exists():
+                    shutil.copy2(project_root / "LICENSE", temp_path)
+                    print("LICENSE copied to DMG")
+                
+                # Create Applications symlink
+                os.symlink("/Applications", temp_path / "Applications")
+                print("Applications symlink created")
+                
+                # Create DMG using hdiutil
+                print(f"Creating DMG from {temp_path} to {dmg_path}")
+                result = subprocess.run([
+                    "hdiutil", "create",
+                    "-volname", "ECU BIN Reader",
+                    "-srcfolder", str(temp_path),
+                    "-ov",  # Overwrite if exists
+                    "-format", "UDZO",  # Compressed DMG
+                    str(dmg_path)
+                ], capture_output=True, text=True, check=True)
+                
+                print("DMG creation command completed")
+                print(f"stdout: {result.stdout}")
+                if result.stderr:
+                    print(f"stderr: {result.stderr}")
+                
+                # Verify DMG was created
+                if dmg_path.exists():
+                    print(f"DMG file created successfully: {dmg_path}")
+                    print(f"DMG file size: {dmg_path.stat().st_size} bytes")
+                    
+                    # Remove quarantine attribute from DMG itself
+                    try:
+                        subprocess.run([
+                            "xattr", "-rd", "com.apple.quarantine", str(dmg_path)
+                        ], check=True)
+                        print("Removed quarantine attribute from DMG")
+                    except subprocess.CalledProcessError:
+                        print("Could not remove quarantine attribute from DMG (this is normal)")
+                    
+                    return True
+                else:
+                    print("Error: DMG file not found after creation")
+                    return False
+                    
+        except subprocess.CalledProcessError as e:
+            print(f"DMG creation failed: {e}")
+            print(f"stdout: {e.stdout}")
+            print(f"stderr: {e.stderr}")
+            print(f"Return code: {e.returncode}")
+            return False
+            
+        except Exception as e:
+            print(f"DMG creation error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    else:
+        print(f"Error: App bundle not found at {app_bundle}")
         return False
 
 
@@ -351,112 +482,32 @@ def main():
         project_root = Path(__file__).parent
         build_dir = project_root / "build" / "macos"
         
-        # Create a proper DMG file
-        print("\nCreating DMG file...")
-        app_bundle = build_dir / "ECU_BIN_Reader"
+        # Create a proper DMG file with quarantine fix
+        print("\nCreating DMG file with quarantine fix...")
         
-        if app_bundle.exists():
-            # Create a proper DMG using hdiutil
-            dmg_path = build_dir / "ECU_BIN_Reader.dmg"
-            
-            try:
-                # Create a temporary directory for DMG contents
-                import tempfile
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    temp_path = Path(temp_dir)
-                    
-                    # Copy app bundle to temp directory
-                    app_dest = temp_path / "ECU BIN Reader.app"
-                    shutil.copytree(app_bundle, app_dest)
-                    print(f"App bundle copied to temp directory: {app_dest}")
-                    
-                    # Copy additional files if they exist
-                    if (project_root / "README.md").exists():
-                        shutil.copy2(project_root / "README.md", temp_path)
-                        print("README.md copied to DMG")
-                    
-                    if (project_root / "LICENSE").exists():
-                        shutil.copy2(project_root / "LICENSE", temp_path)
-                        print("LICENSE copied to DMG")
-                    
-                    # Create Applications symlink
-                    os.symlink("/Applications", temp_path / "Applications")
-                    print("Applications symlink created")
-                    
-                    # Create DMG using hdiutil
-                    print(f"Creating DMG from {temp_path} to {dmg_path}")
-                    result = subprocess.run([
-                        "hdiutil", "create",
-                        "-volname", "ECU BIN Reader",
-                        "-srcfolder", str(temp_path),
-                        "-ov",  # Overwrite if exists
-                        "-format", "UDZO",  # Compressed DMG
-                        str(dmg_path)
-                    ], capture_output=True, text=True, check=True)
-                    
-                    print("DMG creation command completed")
-                    print(f"stdout: {result.stdout}")
-                    if result.stderr:
-                        print(f"stderr: {result.stderr}")
-                    
-                    # Verify DMG was created
-                    if dmg_path.exists():
-                        print(f"DMG file created successfully: {dmg_path}")
-                        print(f"DMG file size: {dmg_path.stat().st_size} bytes")
-                        
-                        # Add quarantine attribute to allow opening
-                        try:
-                            subprocess.run([
-                                "xattr", "-rd", "com.apple.quarantine", str(dmg_path)
-                            ], check=True)
-                            print("Removed quarantine attribute from DMG")
-                        except subprocess.CalledProcessError:
-                            print("Could not remove quarantine attribute (this is normal)")
-                        
-                    else:
-                        print("Error: DMG file not found after creation")
-                        raise FileNotFoundError("DMG file not created")
-                        
-            except subprocess.CalledProcessError as e:
-                print(f"DMG creation failed: {e}")
-                print(f"stdout: {e.stdout}")
-                print(f"stderr: {e.stderr}")
-                print(f"Return code: {e.returncode}")
-                
-                # Fallback: create a simple archive
-                print("Falling back to archive creation...")
-                import tarfile
-                archive_path = build_dir / "ECU_BIN_Reader.tar.gz"
-                with tarfile.open(archive_path, "w:gz") as tar:
-                    tar.add(app_bundle, arcname="ECU_BIN_Reader")
-                shutil.copy2(archive_path, dmg_path)
-                print(f"Archive created as fallback: {dmg_path}")
-                
-            except Exception as e:
-                print(f"DMG creation error: {e}")
-                import traceback
-                traceback.print_exc()
-                
-                # Fallback: create a simple archive
-                print("Falling back to archive creation...")
-                import tarfile
-                archive_path = build_dir / "ECU_BIN_Reader.tar.gz"
-                with tarfile.open(archive_path, "w:gz") as tar:
-                    tar.add(app_bundle, arcname="ECU_BIN_Reader")
-                shutil.copy2(archive_path, dmg_path)
-                print(f"Archive created as fallback: {dmg_path}")
+        if create_dmg_with_quarantine_fix():
+            print("DMG created successfully with quarantine attributes removed!")
         else:
-            print(f"Error: App bundle not found at {app_bundle}")
-            print(f"Files in build directory: {list(build_dir.iterdir())}")
+            print("DMG creation failed, falling back to archive...")
+            # Fallback: create a simple archive
+            import tarfile
+            archive_path = build_dir / "ECU_BIN_Reader.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as tar:
+                tar.add(app_bundle, arcname="ECU_BIN_Reader")
+            dmg_path = build_dir / "ECU_BIN_Reader.dmg"
+            shutil.copy2(archive_path, dmg_path)
+            print(f"Archive created as fallback: {dmg_path}")
         
         print("\nNext steps:")
         print("1. Test the app bundle in build/macos/ECU_BIN_Reader")
         print("2. DMG file created: build/macos/ECU_BIN_Reader.dmg")
         print("3. To create PKG: cd build/macos/installer && ./create_pkg.sh")
         print("4. For App Store distribution, use Xcode and App Store Connect")
-        print("\nNote: If users get 'damaged' warning, they can:")
+        print("\nNote: The DMG should now work without 'damaged' warnings!")
+        print("If users still get warnings, they can:")
         print("   - Right-click the app and select 'Open'")
         print("   - Or run: xattr -rd com.apple.quarantine /path/to/app")
+        print("   - The app is ad-hoc signed and quarantine attributes are removed")
         
     else:
         print("\nBuild failed!")
