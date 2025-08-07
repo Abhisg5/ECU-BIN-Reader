@@ -117,22 +117,44 @@ TEMP_DIR=$(mktemp -d)
 APP_DIR="$TEMP_DIR/$APP_NAME.app"
 
 # Copy app bundle
-cp -R "{build_dir}/ECU_BIN_Reader" "$APP_DIR"
+if [ -d "{build_dir}/ECU_BIN_Reader" ]; then
+    cp -R "{build_dir}/ECU_BIN_Reader" "$APP_DIR"
+    echo "App bundle copied successfully"
+else
+    echo "Error: App bundle not found at {build_dir}/ECU_BIN_Reader"
+    exit 1
+fi
 
-# Copy additional files
-cp "{build_dir}/README.md" "$TEMP_DIR/"
-cp "{build_dir}/LICENSE" "$TEMP_DIR/"
+# Copy additional files (if they exist)
+if [ -f "{build_dir}/README.md" ]; then
+    cp "{build_dir}/README.md" "$TEMP_DIR/"
+    echo "README.md copied"
+fi
+
+if [ -f "{build_dir}/LICENSE" ]; then
+    cp "{build_dir}/LICENSE" "$TEMP_DIR/"
+    echo "LICENSE copied"
+fi
 
 # Create Applications symlink
 ln -s /Applications "$TEMP_DIR/Applications"
 
 # Create DMG
+echo "Creating DMG file..."
 hdiutil create -volname "$VOLUME_NAME" -srcfolder "$TEMP_DIR" -ov -format UDZO "$DMG_NAME"
+
+# Check if DMG was created
+if [ -f "$DMG_NAME" ]; then
+    echo "DMG created successfully: $DMG_NAME"
+else
+    echo "Error: DMG creation failed"
+    exit 1
+fi
 
 # Clean up
 rm -rf "$TEMP_DIR"
 
-echo "DMG created: $DMG_NAME"
+echo "DMG creation completed: $DMG_NAME"
 """
     
     dmg_script_path = build_dir / "create_dmg.sh"
@@ -310,6 +332,9 @@ def main():
         
         if dmg_script.exists():
             try:
+                print(f"Running DMG creation script from: {installer_dir}")
+                print(f"DMG script path: {dmg_script}")
+                
                 # Run the DMG creation script
                 result = subprocess.run(["./create_dmg.sh"], 
                                      cwd=installer_dir, 
@@ -317,6 +342,7 @@ def main():
                                      capture_output=True, 
                                      text=True)
                 print("DMG file created successfully!")
+                print(f"Script output: {result.stdout}")
                 
                 # Check if DMG was created
                 dmg_file = installer_dir / "ECU_BIN_Reader_1.0.0.dmg"
@@ -325,15 +351,24 @@ def main():
                     final_dmg = build_dir / "ECU_BIN_Reader.dmg"
                     shutil.copy2(dmg_file, final_dmg)
                     print(f"DMG file ready: {final_dmg}")
+                    print(f"DMG file size: {final_dmg.stat().st_size} bytes")
                 else:
                     print("Warning: DMG file not found after creation")
+                    print(f"Looking for: {dmg_file}")
+                    print(f"Files in installer directory: {list(installer_dir.iterdir())}")
                     
             except subprocess.CalledProcessError as e:
                 print(f"DMG creation failed: {e}")
                 print(f"stdout: {e.stdout}")
                 print(f"stderr: {e.stderr}")
+                print(f"Return code: {e.returncode}")
             except Exception as e:
                 print(f"DMG creation error: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"DMG script not found at: {dmg_script}")
+            print(f"Files in installer directory: {list(installer_dir.iterdir())}")
         
         print("\nNext steps:")
         print("1. Test the app bundle in build/macos/installer/ECU_BIN_Reader")
