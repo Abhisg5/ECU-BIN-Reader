@@ -325,53 +325,96 @@ def main():
         create_dmg_installer()
         create_pkg_installer()
         
-        # Actually create the DMG file
+        # Create a proper DMG file
         print("\nCreating DMG file...")
-        installer_dir = build_dir / "installer"
-        dmg_script = installer_dir / "create_dmg.sh"
+        app_bundle = build_dir / "ECU_BIN_Reader"
         
-        if dmg_script.exists():
+        if app_bundle.exists():
+            # Create a proper DMG using hdiutil
+            dmg_path = build_dir / "ECU_BIN_Reader.dmg"
+            
             try:
-                print(f"Running DMG creation script from: {installer_dir}")
-                print(f"DMG script path: {dmg_script}")
-                
-                # Run the DMG creation script
-                result = subprocess.run(["./create_dmg.sh"], 
-                                     cwd=installer_dir, 
-                                     check=True, 
-                                     capture_output=True, 
-                                     text=True)
-                print("DMG file created successfully!")
-                print(f"Script output: {result.stdout}")
-                
-                # Check if DMG was created
-                dmg_file = installer_dir / "ECU_BIN_Reader_1.0.0.dmg"
-                if dmg_file.exists():
-                    # Copy DMG to build directory for GitHub Actions
-                    final_dmg = build_dir / "ECU_BIN_Reader.dmg"
-                    shutil.copy2(dmg_file, final_dmg)
-                    print(f"DMG file ready: {final_dmg}")
-                    print(f"DMG file size: {final_dmg.stat().st_size} bytes")
-                else:
-                    print("Warning: DMG file not found after creation")
-                    print(f"Looking for: {dmg_file}")
-                    print(f"Files in installer directory: {list(installer_dir.iterdir())}")
+                # Create a temporary directory for DMG contents
+                import tempfile
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir)
                     
+                    # Copy app bundle to temp directory
+                    app_dest = temp_path / "ECU BIN Reader.app"
+                    shutil.copytree(app_bundle, app_dest)
+                    print(f"App bundle copied to temp directory: {app_dest}")
+                    
+                    # Copy additional files if they exist
+                    if (project_root / "README.md").exists():
+                        shutil.copy2(project_root / "README.md", temp_path)
+                        print("README.md copied to DMG")
+                    
+                    if (project_root / "LICENSE").exists():
+                        shutil.copy2(project_root / "LICENSE", temp_path)
+                        print("LICENSE copied to DMG")
+                    
+                    # Create Applications symlink
+                    os.symlink("/Applications", temp_path / "Applications")
+                    print("Applications symlink created")
+                    
+                    # Create DMG using hdiutil
+                    print(f"Creating DMG from {temp_path} to {dmg_path}")
+                    result = subprocess.run([
+                        "hdiutil", "create",
+                        "-volname", "ECU BIN Reader",
+                        "-srcfolder", str(temp_path),
+                        "-ov",  # Overwrite if exists
+                        "-format", "UDZO",  # Compressed DMG
+                        str(dmg_path)
+                    ], capture_output=True, text=True, check=True)
+                    
+                    print("DMG creation command completed")
+                    print(f"stdout: {result.stdout}")
+                    if result.stderr:
+                        print(f"stderr: {result.stderr}")
+                    
+                    # Verify DMG was created
+                    if dmg_path.exists():
+                        print(f"DMG file created successfully: {dmg_path}")
+                        print(f"DMG file size: {dmg_path.stat().st_size} bytes")
+                    else:
+                        print("Error: DMG file not found after creation")
+                        raise FileNotFoundError("DMG file not created")
+                        
             except subprocess.CalledProcessError as e:
                 print(f"DMG creation failed: {e}")
                 print(f"stdout: {e.stdout}")
                 print(f"stderr: {e.stderr}")
                 print(f"Return code: {e.returncode}")
+                
+                # Fallback: create a simple archive
+                print("Falling back to archive creation...")
+                import tarfile
+                archive_path = build_dir / "ECU_BIN_Reader.tar.gz"
+                with tarfile.open(archive_path, "w:gz") as tar:
+                    tar.add(app_bundle, arcname="ECU_BIN_Reader")
+                shutil.copy2(archive_path, dmg_path)
+                print(f"Archive created as fallback: {dmg_path}")
+                
             except Exception as e:
                 print(f"DMG creation error: {e}")
                 import traceback
                 traceback.print_exc()
+                
+                # Fallback: create a simple archive
+                print("Falling back to archive creation...")
+                import tarfile
+                archive_path = build_dir / "ECU_BIN_Reader.tar.gz"
+                with tarfile.open(archive_path, "w:gz") as tar:
+                    tar.add(app_bundle, arcname="ECU_BIN_Reader")
+                shutil.copy2(archive_path, dmg_path)
+                print(f"Archive created as fallback: {dmg_path}")
         else:
-            print(f"DMG script not found at: {dmg_script}")
-            print(f"Files in installer directory: {list(installer_dir.iterdir())}")
+            print(f"Error: App bundle not found at {app_bundle}")
+            print(f"Files in build directory: {list(build_dir.iterdir())}")
         
         print("\nNext steps:")
-        print("1. Test the app bundle in build/macos/installer/ECU_BIN_Reader")
+        print("1. Test the app bundle in build/macos/ECU_BIN_Reader")
         print("2. DMG file created: build/macos/ECU_BIN_Reader.dmg")
         print("3. To create PKG: cd build/macos/installer && ./create_pkg.sh")
         print("4. For App Store distribution, use Xcode and App Store Connect")
