@@ -188,9 +188,9 @@ def main():
     # Check if required tools are available
     try:
         import PyInstaller
-        print("✓ PyInstaller found")
+        print("[OK] PyInstaller found")
     except ImportError:
-        print("✗ PyInstaller not found. Installing...")
+        print("[ERROR] PyInstaller not found. Installing...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
     
     # Build executable
