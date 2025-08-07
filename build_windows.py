@@ -11,6 +11,30 @@ import subprocess
 from pathlib import Path
 
 
+def create_app_icon():
+    """Create a simple app icon if none exists"""
+    
+    # Create assets directory if it doesn't exist
+    assets_dir = Path(__file__).parent / "assets"
+    assets_dir.mkdir(exist_ok=True)
+    
+    # Create a simple icon file (this is a placeholder - you should replace with a real icon)
+    icon_content = """<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#2c3e50" rx="64"/>
+  <circle cx="256" cy="200" r="80" fill="#3498db"/>
+  <rect x="176" y="320" width="160" height="120" fill="#e74c3c" rx="16"/>
+  <text x="256" y="420" text-anchor="middle" fill="white" font-family="Arial" font-size="24">ECU</text>
+</svg>"""
+    
+    icon_path = assets_dir / "icon.svg"
+    with open(icon_path, "w") as f:
+        f.write(icon_content)
+    
+    print(f"Created placeholder icon: {icon_path}")
+    print("Note: Replace with a proper .ico file for production")
+
+
 def build_windows_executable():
     """Build Windows executable using PyInstaller"""
     
@@ -199,6 +223,9 @@ def main():
     except ImportError:
         print("[ERROR] PyInstaller not found. Installing...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
+    
+    # Create app icon
+    create_app_icon()
     
     # Build executable
     if build_windows_executable():

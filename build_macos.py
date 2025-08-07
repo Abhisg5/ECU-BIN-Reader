@@ -220,15 +220,12 @@ def create_pkg_installer():
     with open(distribution_plist_path, "w") as f:
         f.write(distribution_plist)
     
-    # Create PKG build script
+    # Create PKG script
     pkg_script = f"""
 #!/bin/bash
 
-# Create PKG installer for ECU BIN Reader
-APP_NAME="ECU BIN Reader"
-PKG_NAME="ECU_BIN_Reader.pkg"
-COMPONENT_PLIST="{component_plist_path}"
-DISTRIBUTION_PLIST="{distribution_plist_path}"
+# Create PKG for ECU BIN Reader
+PKG_NAME="ECU_BIN_Reader_Installer.pkg"
 
 # Build component package
 pkgbuild --component "{build_dir}/ECU_BIN_Reader" \\
@@ -286,6 +283,8 @@ def codesign_app():
             return True
         else:
             print("No code signing certificate found. App will be unsigned.")
+            print("Note: Unsigned apps may show 'damaged' warnings on macOS.")
+            print("Users can right-click and select 'Open' to bypass this warning.")
             return False
             
     except subprocess.CalledProcessError as e:
@@ -294,6 +293,30 @@ def codesign_app():
     except Exception as e:
         print(f"Code signing error: {e}")
         return False
+
+
+def create_app_icon():
+    """Create a simple app icon if none exists"""
+    
+    # Create assets directory if it doesn't exist
+    assets_dir = Path(__file__).parent / "assets"
+    assets_dir.mkdir(exist_ok=True)
+    
+    # Create a simple icon file (this is a placeholder - you should replace with a real icon)
+    icon_content = """<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#2c3e50" rx="64"/>
+  <circle cx="256" cy="200" r="80" fill="#3498db"/>
+  <rect x="176" y="320" width="160" height="120" fill="#e74c3c" rx="16"/>
+  <text x="256" y="420" text-anchor="middle" fill="white" font-family="Arial" font-size="24">ECU</text>
+</svg>"""
+    
+    icon_path = assets_dir / "icon.svg"
+    with open(icon_path, "w") as f:
+        f.write(icon_content)
+    
+    print(f"Created placeholder icon: {icon_path}")
+    print("Note: Replace with a proper .icns file for production")
 
 
 def main():
@@ -310,13 +333,12 @@ def main():
         print("[ERROR] PyInstaller not found. Installing...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
     
+    # Create app icon
+    create_app_icon()
+    
     # Build app bundle
     if build_macos_app():
         print("\nBuild completed successfully!")
-        
-        # Define build directory
-        project_root = Path(__file__).parent
-        build_dir = project_root / "build" / "macos"
         
         # Code sign the app
         codesign_app()
@@ -324,6 +346,10 @@ def main():
         # Create installer scripts
         create_dmg_installer()
         create_pkg_installer()
+        
+        # Define build directory
+        project_root = Path(__file__).parent
+        build_dir = project_root / "build" / "macos"
         
         # Create a proper DMG file
         print("\nCreating DMG file...")
@@ -377,6 +403,16 @@ def main():
                     if dmg_path.exists():
                         print(f"DMG file created successfully: {dmg_path}")
                         print(f"DMG file size: {dmg_path.stat().st_size} bytes")
+                        
+                        # Add quarantine attribute to allow opening
+                        try:
+                            subprocess.run([
+                                "xattr", "-rd", "com.apple.quarantine", str(dmg_path)
+                            ], check=True)
+                            print("Removed quarantine attribute from DMG")
+                        except subprocess.CalledProcessError:
+                            print("Could not remove quarantine attribute (this is normal)")
+                        
                     else:
                         print("Error: DMG file not found after creation")
                         raise FileNotFoundError("DMG file not created")
@@ -418,6 +454,9 @@ def main():
         print("2. DMG file created: build/macos/ECU_BIN_Reader.dmg")
         print("3. To create PKG: cd build/macos/installer && ./create_pkg.sh")
         print("4. For App Store distribution, use Xcode and App Store Connect")
+        print("\nNote: If users get 'damaged' warning, they can:")
+        print("   - Right-click the app and select 'Open'")
+        print("   - Or run: xattr -rd com.apple.quarantine /path/to/app")
         
     else:
         print("\nBuild failed!")
