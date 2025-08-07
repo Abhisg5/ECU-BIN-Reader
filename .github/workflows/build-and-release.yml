@@ -1,0 +1,116 @@
+name: Build and Release ECU BIN Reader
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Build macOS DMG
+      run: |
+        python build_macos.py
+        
+    - name: Upload macOS DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: ecu-bin-reader-macos
+        path: build/macos/ECU_BIN_Reader.dmg
+        
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Build Windows EXE
+      run: |
+        python build_windows.py
+        
+    - name: Upload Windows EXE
+      uses: actions/upload-artifact@v4
+      with:
+        name: ecu-bin-reader-windows
+        path: build/windows/ECU_BIN_Reader.exe
+        
+  create-release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download macOS DMG
+      uses: actions/download-artifact@v4
+      with:
+        name: ecu-bin-reader-macos
+        path: dist/
+        
+    - name: Download Windows EXE
+      uses: actions/download-artifact@v4
+      with:
+        name: ecu-bin-reader-windows
+        path: dist/
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/ECU_BIN_Reader.dmg
+          dist/ECU_BIN_Reader.exe
+        body: |
+          ## ECU BIN Reader v${{ github.ref_name }}
+          
+          ### What's New
+          - Professional ECU BIN file extraction tool
+          - Cross-platform support (Windows & macOS)
+          - Responsive dark theme UI
+          - OBD2 adapter detection and communication
+          - ECU scanning and BIN file extraction
+          
+          ### Downloads
+          - **macOS**: ECU_BIN_Reader.dmg
+          - **Windows**: ECU_BIN_Reader.exe
+          
+          ### Installation
+          1. Download the appropriate file for your OS
+          2. Run the installer
+          3. Connect your OBD2 adapter
+          4. Start extracting ECU BIN files!
+          
+          ### Features
+          - 🔌 Automatic OBD2 adapter detection
+          - 🚗 ECU scanning and protocol detection
+          - 📖 Full BIN file extraction
+          - 💾 Save and manage BIN files
+          - 🎨 Professional dark theme UI
+          - 📱 Responsive design for any screen size
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

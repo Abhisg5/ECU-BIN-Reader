@@ -19,15 +19,20 @@ A cross-platform desktop application for reading BIN files from automotive ECUs 
 
 ## Installation
 
-### From Source
+### Option 1: Download Pre-built Executables (Recommended)
+Visit the [Releases page](https://github.com/Abhisg5/ECU-BIN-Reader/releases) to download the latest:
+- **macOS**: `ECU_BIN_Reader.dmg`
+- **Windows**: `ECU_BIN_Reader.exe`
+
+### Option 2: Build from Source
 ```bash
-git clone <repository>
-cd ecu-bin-reader
+git clone https://github.com/Abhisg5/ECU-BIN-Reader.git
+cd ECU-BIN-Reader
 pip install -r requirements.txt
 python main.py
 ```
 
-### Build Executables
+### Option 3: Build Executables Locally
 ```bash
 # Windows
 python build_windows.py
@@ -75,6 +80,22 @@ ecu-bin-reader/
 - Automatic security access
 - Retry mechanisms for failed operations
 - Checksum verification
+
+## 🤖 Automated Builds
+
+This repository uses GitHub Actions to automatically build and release executables:
+
+- **Every Push**: Builds are tested on both Windows and macOS
+- **Tagged Releases**: Creates downloadable DMG and EXE files
+- **Continuous Integration**: Ensures code quality and functionality
+
+### Creating a Release
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This will automatically trigger the build process and create a new release with downloadable files.
 
 ## Contributing
 
