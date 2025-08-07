@@ -41,9 +41,16 @@ def build_windows_executable():
         "--hidden-import", "cryptography",
         "--hidden-import", "numpy",
         "--hidden-import", "pandas",
-        "--icon", "assets/icon.ico",  # Add icon if available
         "main.py"
     ]
+    
+    # Add icon if available
+    icon_path = project_root / "assets" / "icon.ico"
+    if icon_path.exists():
+        cmd.extend(["--icon", str(icon_path)])
+        print(f"Using icon: {icon_path}")
+    else:
+        print("No icon file found, using default")
     
     try:
         # Run PyInstaller

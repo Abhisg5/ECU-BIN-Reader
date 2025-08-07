@@ -299,9 +299,41 @@ def main():
         create_dmg_installer()
         create_pkg_installer()
         
+        # Actually create the DMG file
+        print("\nCreating DMG file...")
+        installer_dir = build_dir / "installer"
+        dmg_script = installer_dir / "create_dmg.sh"
+        
+        if dmg_script.exists():
+            try:
+                # Run the DMG creation script
+                result = subprocess.run(["./create_dmg.sh"], 
+                                     cwd=installer_dir, 
+                                     check=True, 
+                                     capture_output=True, 
+                                     text=True)
+                print("DMG file created successfully!")
+                
+                # Check if DMG was created
+                dmg_file = installer_dir / "ECU_BIN_Reader_1.0.0.dmg"
+                if dmg_file.exists():
+                    # Copy DMG to build directory for GitHub Actions
+                    final_dmg = build_dir / "ECU_BIN_Reader.dmg"
+                    shutil.copy2(dmg_file, final_dmg)
+                    print(f"DMG file ready: {final_dmg}")
+                else:
+                    print("Warning: DMG file not found after creation")
+                    
+            except subprocess.CalledProcessError as e:
+                print(f"DMG creation failed: {e}")
+                print(f"stdout: {e.stdout}")
+                print(f"stderr: {e.stderr}")
+            except Exception as e:
+                print(f"DMG creation error: {e}")
+        
         print("\nNext steps:")
         print("1. Test the app bundle in build/macos/installer/ECU_BIN_Reader")
-        print("2. To create DMG: cd build/macos/installer && ./create_dmg.sh")
+        print("2. DMG file created: build/macos/ECU_BIN_Reader.dmg")
         print("3. To create PKG: cd build/macos/installer && ./create_pkg.sh")
         print("4. For App Store distribution, use Xcode and App Store Connect")
         
