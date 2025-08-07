@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -79,14 +83,16 @@ jobs:
         name: ecu-bin-reader-windows
         path: dist/
         
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
+        - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        files: |
-          dist/ECU_BIN_Reader.dmg
-          dist/ECU_BIN_Reader.exe
+        tag_name: ${{ github.ref }}
+        release_name: ECU BIN Reader ${{ github.ref_name }}
         body: |
-          ## ECU BIN Reader v${{ github.ref_name }}
+          ## ECU BIN Reader ${{ github.ref_name }}
           
           ### What's New
           - Professional ECU BIN file extraction tool
@@ -112,5 +118,25 @@ jobs:
           - 💾 Save and manage BIN files
           - 🎨 Professional dark theme UI
           - 📱 Responsive design for any screen size
+        draft: false
+        prerelease: false
+        
+    - name: Upload DMG
+      uses: actions/upload-release-asset@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/ECU_BIN_Reader.dmg
+        asset_name: ECU_BIN_Reader.dmg
+        asset_content_type: application/octet-stream
+        
+    - name: Upload EXE
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/ECU_BIN_Reader.exe
+        asset_name: ECU_BIN_Reader.exe
+        asset_content_type: application/octet-stream 
