@@ -292,6 +292,10 @@ def main():
     if build_macos_app():
         print("\nBuild completed successfully!")
         
+        # Define build directory
+        project_root = Path(__file__).parent
+        build_dir = project_root / "build" / "macos"
+        
         # Code sign the app
         codesign_app()
         
